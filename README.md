@@ -10,6 +10,8 @@ https://github.com/NoBugBoy/kubectl-tools  点个star不过分
 
 kubernetes版本 > 1.12 + 
 
+直接从release中下载 https://github.com/NoBugBoy/kubectl-tools/releases/tag/1.0
+
 进入kubernetes目录 使用交叉编译打包为linux平台的包，将生成的kubectl-tools可执行文件放入k8s集群master节点的/root/bin目录下（kubectl plugin list）
 ```shell
 cd kubernetes
