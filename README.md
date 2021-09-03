@@ -18,8 +18,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64  go build -o kubectl-tools
 
 目前提供的功能
 
-1. debug,提供一个带工具的容器，加入到目标容器的namespace中，在相同的视图下进行诊断
-
+1. debug,提供一个带工具的容器，加入到目标容器的namespace中，在相同的视图下进行诊断，debug的目标节点如果是第一次操作，则需要多等待一些时间，等待拉取debug-k8s的镜像，还有指定的debug container的镜像，重复操作如果只更改了debug container的话就只拉取新的工具镜像，否则就不需要太多等待时间
 ![img.png](img/img0.png)
 ![img.png](img/img.png)
 
