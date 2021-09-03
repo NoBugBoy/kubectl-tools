@@ -1,4 +1,4 @@
-package main
+package debug
 
 import (
 	"context"
@@ -34,10 +34,10 @@ func runPlugin(podName , kubeConfigDir string) *Plugin {
 		}
 		if pod != nil {
 			return &Plugin{
-				ClientSet: clientset,
-				NodeName: pod.Spec.NodeName,
+				ClientSet:   clientset,
+				NodeName:    pod.Spec.NodeName,
 				ContainerId: getContainerIdByPod(pod.Spec.Containers[0].Name,pod),
-				Namespace: item.Name,
+				Namespace:   item.Name,
 			}
 		}
 	}
