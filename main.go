@@ -26,7 +26,9 @@ import (
 	"strconv"
 )
 func main() {
-	containerId := os.Getenv("CONTAINERID")
+	containerId := os.Getenv("CONTAINER_ID")
+	image := os.Getenv("IMAGE")
+	cmd := os.Getenv("RCMD")
 	if containerId == strconv.Itoa(1) {
 		os.Exit(1)
 	}
@@ -36,15 +38,17 @@ func main() {
 		fmt.Printf("connect docker error ")
 		panic(err)
 	}
-	kd.PullDebugImg("nicolaka/netshoot:latest",client)
-
-	ttyRes := kd.CreateDebugContainer(containerId,"nicolaka/netshoot:latest",client)
-
-	container := kd.ConnectionTty(ttyRes)
-
 	fmt.Println("waiting for plugin connect ..")
 	conn,create := tcp.OpenSocket()
 	<- create
+
+	kd.PullDebugImg(image,client,conn)
+
+	ttyRes := kd.CreateDebugContainer(containerId,image,cmd,client)
+
+	container := kd.ConnectionTty(ttyRes,conn,cmd)
+
+
 	fmt.Println("plugin connect successful! create debug container..")
 
 	go func() {
@@ -70,7 +74,7 @@ func main() {
 				kd.ClearAndClose(ttyRes.DebugContainerId,ttyRes.Client)
 				conn.Conn.Write([]byte("closed"))
 			}
-			fmt.Println(string(b[:read]))
+			//fmt.Println(string(b[:read]))
 			container.In <- string(b[:read])
 		}
 	}()

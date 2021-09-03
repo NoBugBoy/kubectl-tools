@@ -2,9 +2,10 @@ FROM alpine:3.11.5
 
 COPY ./run.sh /
 COPY ./kubedebug /bin/kubedebug
-RUN chmod 777 /bin/kubedebug
 RUN chmod 755 /run.sh
-ENV CONTAINERID=1
+ENV CONTAINER_ID=1
+ENV IMAGE=nicolaka/netshoot:latest
+ENV RCMD=bash
 EXPOSE 19675
 
 CMD ["/run.sh"]

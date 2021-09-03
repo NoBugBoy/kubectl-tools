@@ -10,7 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/conditions"
 )
 
-func GetPod(podName,ns,containerId,node string) *corev1.Pod {
+func GetPod(podName,ns,containerId,image,node,cmd string) *corev1.Pod {
 	privileged := true
 	pod := &corev1.Pod{
 		TypeMeta: v1.TypeMeta{
@@ -27,15 +27,23 @@ func GetPod(podName,ns,containerId,node string) *corev1.Pod {
 			Containers: []corev1.Container{
 				{
 					Name:            "debug-k8s",
-					Image:           "yujian1996/debug-k8s:v1.2",
+					Image:           "yujian1996/debug-k8s:v3.2",
 					ImagePullPolicy: corev1.PullPolicy("IfNotPresent"),
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &privileged,
 					},
 					Env: []corev1.EnvVar{
 						{
-							Name: "CONTAINERID",
+							Name: "CONTAINER_ID",
 							Value: containerId,
+						},
+						{
+							Name: "IMAGE",
+							Value: image,
+						},
+						{
+							Name: "RCMD",
+							Value: cmd,
 						},
 					},
 					Ports: []corev1.ContainerPort{

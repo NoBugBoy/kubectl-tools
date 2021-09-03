@@ -2,15 +2,28 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
+	"io"
+	"kubedebug/tcp"
 	"strings"
 	"time"
 )
 
-func CreateDebugContainer(targetContainerId , image string, client *dockerclient.Client) *TtyResponse {
+type PullEvent struct {
+	Status         string `json:"status"`
+	Error          string `json:"error"`
+	Progress       string `json:"progress"`
+	ProgressDetail struct {
+		Current int `json:"current"`
+		Total   int `json:"total"`
+	} `json:"progressDetail"`
+}
+
+func CreateDebugContainer(targetContainerId , image, cmd string, client *dockerclient.Client) *TtyResponse {
 	ctx := context.Background()
 	opts := types.ContainerAttachOptions{
 		Stream: true,
@@ -22,7 +35,7 @@ func CreateDebugContainer(targetContainerId , image string, client *dockerclient
 		Tty: true,
 		OpenStdin: true,
 		StdinOnce: true,
-		Cmd: []string{"bash"},
+		Entrypoint: []string{cmd},
 		AttachStdin: true,
 		AttachStderr: true,
 		AttachStdout: true,
@@ -79,15 +92,32 @@ func ClearAndClose(containerId string,client *dockerclient.Client)  {
 	fmt.Println(">>> clear and close successful . <<<")
 }
 
-func PullDebugImg(imageName string,client *dockerclient.Client){
+func PullDebugImg(imageName string,client *dockerclient.Client,conn *tcp.Socket){
 	ctx := context.Background()
-	fmt.Println("pull image" + imageName)
+	fmt.Println("pull image " + imageName)
 	c, err := client.ImagePull(ctx,imageName,types.ImagePullOptions{})
 	defer func() {
 		if c != nil {
 			c.Close()
 		}
 	}()
+	for {
+		var pullEvent *PullEvent
+		b := make([]byte,10240)
+		read, err := c.Read(b)
+		if err != nil && err == io.EOF{
+			conn.Conn.Write([]byte("pulled"))
+			break
+		}
+		err = json.Unmarshal(b[:read], &pullEvent)
+		if err != nil{
+			fmt.Println(b[:read])
+			continue
+		}
+		std := pullEvent.Status + strings.Replace(pullEvent.Progress,"\\u003e",">",1)
+		conn.Conn.Write([]byte(std))
+	}
+
 	if err != nil {
 		fmt.Printf("pull images erro %s \n",err)
 	}

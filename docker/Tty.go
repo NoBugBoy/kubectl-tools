@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"github.com/docker/docker/api/types"
 	c "github.com/docker/docker/client"
+	"io"
+	"kubedebug/tcp"
 )
 
 type Container struct {
@@ -18,13 +20,18 @@ type TtyResponse struct {
 }
 
 
-func ConnectionTty(tty *TtyResponse) *Container {
+func ConnectionTty(tty *TtyResponse,sockect *tcp.Socket,cmd string) *Container {
 	container := &Container{
 		In: make(chan string),
 		Out: make(chan string),
 	}
 	go container.stdInput(&tty.Response)
-	go container.stdOutput(&tty.Response)
+	if cmd == "sh" || cmd == "bash"{
+		go container.stdOutput(&tty.Response,nil)
+	}else{
+		go container.stdOutput(&tty.Response,sockect)
+	}
+
 	return container
 }
 
@@ -39,15 +46,19 @@ func (c *Container) stdInput (hijack *types.HijackedResponse)  {
 	}
 }
 
-func (c *Container) stdOutput (hijack *types.HijackedResponse)  {
-	scanner := bufio.NewScanner(hijack.Reader)
+func (c *Container) stdOutput (hijack *types.HijackedResponse,socket *tcp.Socket)  {
+	if socket == nil {
+		scanner := bufio.NewScanner(hijack.Reader)
+		for scanner.Scan(){
+			in := scanner.Text()
+			c.Out <- in
+		}
 
-	for scanner.Scan(){
-		in := scanner.Text()
-		c.Out <- in
+		if err := scanner.Err(); err != nil {
+			//pass
+		}
+	}else{
+		io.Copy(socket.Conn,hijack.Reader)
 	}
 
-	if err := scanner.Err(); err != nil {
-		//pass
-	}
 }

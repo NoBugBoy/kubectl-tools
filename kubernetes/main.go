@@ -13,43 +13,51 @@ import (
 )
 
 func main() {
+	var podName string
+	var image string
+	var config string
+	var rcmd string
 	var debug = &cobra.Command{
 		Use:   "debug",
-		Short: "debug pod name",
-		Example: "kubectl utils debug {podName} {kubeConfigDir}",
+		Short: "debug target pod",
+		Long: "debug target pod , default debug container is nicolaka/netshoot:latest, default kubeConfigDir /root/.kube/config",
+		Example: "kubectl utils debug -c sh -m busybox -f /root/.kube/config -p nginx-xxx",
 		Run: func(cmd *cobra.Command, args []string) {
-			debug(args)
+			if podName == ""{
+				fmt.Println("requires a pod name argument")
+				os.Exit(0)
+			}
+			debug(podName,image,config,rcmd)
 		},
 	}
 	var rootCmd = &cobra.Command{Use: "kubectl"}
 	rootCmd.AddCommand(debug)
+	debug.Flags().StringVarP(&podName, "podName", "p", "", "target pod name")
+	debug.Flags().StringVarP(&image, "image", "m", "nicolaka/netshoot:latest", "debug container image name")
+	debug.Flags().StringVarP(&config, "kubeConfigDir", "f", "/root/.kube/config", "k8s kube config dir")
+	debug.Flags().StringVarP(&rcmd, "cmd", "c", "bash", "container attach command")
 	rootCmd.Execute()
 }
 
-func debug(args []string)  {
+func debug(podName,image,config,cmd string)  {
 	// 0 podName 1 kubeConfig
 	var plugin *Plugin
-	if len(args) == 2 {
-		plugin = runPlugin(args[0],args[1])
-	}else{
-		plugin = runPlugin(args[0],"/root/.kube/config")
-	}
+	plugin = runPlugin(podName,config)
+
 	if plugin == nil {
-		fmt.Println("can not found pod" + args[0])
+		fmt.Println("can not found pod" + podName)
 		os.Exit(1)
 	}
-	pod := GetPod("debug-k8s",plugin.Namespace,plugin.ContainerId,plugin.NodeName)
+	pod := GetPod("debug-k8s",plugin.Namespace,plugin.ContainerId,image,plugin.NodeName,cmd)
 
 	startPod(plugin.Namespace,plugin.ClientSet,pod,plugin.NodeName)
 
 	defer deletePod(plugin.Namespace,plugin.ClientSet)
 
 	conn := connectionTcp(plugin.NodeName)
-
-	fmt.Println("------------------------------------------")
-	fmt.Println("- plugin connected ~ please input cmd >> -")
-	fmt.Println("------------------------------------------")
+	fmt.Println("connected waiting for pull debug image...")
 	exit := make(chan string)
+	pullOk := make(chan string)
 	go func() {
 		for{
 			b := make([]byte,10240)
@@ -57,6 +65,10 @@ func debug(args []string)  {
 			if string(b[:read]) == "closed"{
 				fmt.Println("\ndebug container closed ...")
 				exit <- "closed"
+			}
+			if string(b[:read]) == "pulled"{
+				pullOk <- "pulled"
+				continue
 			}
 			if err != nil && err != io.EOF {
 				fmt.Println(err)
@@ -75,8 +87,14 @@ func debug(args []string)  {
 		deletePod(plugin.Namespace,plugin.ClientSet)
 		os.Exit(1)
 	}()
-	stdin := exec.Command("stty", "erase","^H")
+	<- pullOk
+	fmt.Println("")
+	fmt.Println("------------------------------------------")
+	fmt.Println("- plugin connected ~ please input cmd >> -")
+	fmt.Println("------------------------------------------")
+	stdin := exec.Command("stty", "erase ^H")
 	stdin.Stdin = os.Stdin
+
 	for{
 		reader := bufio.NewReader(stdin.Stdin)
 		text ,err := reader.ReadString('\n')
@@ -99,14 +117,12 @@ func connectionTcp(nodeName string) net.Conn {
 	for  {
 		tcpAddr, err := net.ResolveTCPAddr("tcp",nodeName + ":19675")
 		if err != nil {
-
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
-		// 尝试连接
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
 		if err != nil {
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		conn.Write([]byte("\n"))
